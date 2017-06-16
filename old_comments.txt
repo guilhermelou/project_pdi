@@ -1,0 +1,62 @@
+
+    /*
+    PGM *image, *aux_image;
+    PPM *ppm_image, *ppm_aux_image, *ppm_image1, *ppm_image2, *ppm_image3;
+    char * filename="tung.pgm";
+    image = malloc(sizeof(struct PGM));
+    PGMConstFromFile(image, filename);
+    aux_image = PGMCloneImage(image);
+
+    char * ppm_filename="lenna.ppm";
+    ppm_image = malloc(sizeof(struct PPM));
+    PPMConstFromFile(ppm_image, ppm_filename);
+    ppm_aux_image = PPMCloneImage(ppm_image);
+    ppm_image1 = PPMCloneImage(ppm_image);
+    ppm_image2 = PPMCloneImage(ppm_image);
+    ppm_image3 = PPMCloneImage(ppm_image);
+    //PGMNegative(image);
+    //PGMDarkerSub(image, 50);
+    //PGMDarkerDiv(image, 2);
+    //PGMBrighterSum(image, 50);
+    //PGMBrighterMult(image, 4);
+    //PGMGraphBinary(image, 150);
+    //PGMMirroredH(image);
+    //PGMMirroredV(image);
+    //PGMRotate(image, -90);
+    //PGMChangeColorRange(image, 1);
+    //PGMGraphBinaryAB(image, 100, 150, 0, 170);
+    //PGMGraphAB(aux_image, 100, 150, 70);
+    //PGMSubImages(image, aux_image);
+    //PGMGraphInverseLog(image, 0.5);
+    //PGMGraphLineAB(image,100, 200);
+    //PGMZoomIn(image, 0.5);
+    //PGMAverage(image, 5);
+    //int **filter = PGMConstFilterD();
+    //PGMLaplace(aux_image, filter);
+    //PGMStabilizeValues(aux_image);
+    //PGMSumImages(image, aux_image);
+    //int **filter = PGMConstFilterD();
+    //PGMLaplace(image, filter);
+    //PGMStabilizeValues(image);
+    //PGMEqualizedHistogramLocal(image, 3);
+    //PGMEqualizedHistogramGlobal(image);
+    //PGMHistogramStatistics(image, 4.0, 0.4, 0.02, 0.4, 1);
+    //PGMStabilizeValues(image);
+    //PGMPrint(image);
+    //PGMHistogramToFile(image, "histogram1.csv");
+    //PGMHistogramToFileParam(
+    //        image, PGMHistogramEqualized(image), "histogram_eq4.csv");
+    PGMGraphPow(image, 0.2);
+    PGMPrintToFile(image, "pow.pgm");
+    PPMMixChannel(ppm_image1, 0,2,1);
+    PPMMixChannel(ppm_image2, 1,0,2);
+    PPMMixChannel(ppm_image3, 1,2,0);
+
+    PPMPrintToFile(ppm_image, "original_lenna.ppm");
+    PPMPrintToFile(ppm_image1, "lenna_red.ppm");
+    PPMPrintToFile(ppm_image2, "lenna_green.ppm");
+    PPMPrintToFile(ppm_image3, "lenna_blue.ppm");
+    PPMPrint(ppm_image);
+    */
+    //printf("\n%d\n", strcmp("aaaa", "aaaa"));
+    //PGMHistogramEqualized(image);
