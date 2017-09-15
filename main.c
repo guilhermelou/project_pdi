@@ -4,6 +4,8 @@
 #include <math.h>
 #include <stdbool.h>
 
+#define PI 3.14159265
+
 enum read_state{
     MAGIC_NMB = 0,
     WIDTH,
@@ -28,6 +30,18 @@ typedef struct PPM {
     int color_range;
     int ***matrix;
 } PPM;
+
+// AUXILIAR
+int compare( const void* a, const void* b);
+int compare( const void* a, const void* b)
+{
+     int int_a = * ( (int*) a );
+     int int_b = * ( (int*) b );
+
+     if ( int_a == int_b ) return 0;
+     else if ( int_a < int_b ) return -1;
+     else return 1;
+}
 
 // Function to build a PGM from a char buffer.
 void PGMConstFromBuffer(PGM *image, char *buffer);
@@ -90,6 +104,12 @@ void PGMNegative(PGM *image);
 
 // Function to apply the average
 void PGMAverage(PGM *image, int row_col_near);
+
+// Function to apply the median
+void PGMMedian(PGM *image, int row_col_near);
+
+// Function to apply the Sharpness filter
+void PGMSharpness(PGM *image, int row_col_near, float k);
 
 // Function to get the average of the region of rows and cols near to [i][j]
 int PGMLocalAverage(PGM *image, int i, int j, int row_col_near);
@@ -577,6 +597,53 @@ void PGMAverage(PGM *image, int row_col_near){
     image->matrix = new_image->matrix;
     // free the auxiliar struct
     free(new_image);
+}
+
+
+// Function to apply the median
+void PGMMedian(PGM *image, int matrix_filter_size){
+    // Calculating the number of lines and col around the pixel
+    int row_col_near = (int)((float)matrix_filter_size/2);
+    // Getting the filter index roundd not truncated
+    int filter_index = (matrix_filter_size*matrix_filter_size)/2;
+    // Preparing a cloned image for save the data
+    PGM *new_image = PGMCloneImage(image);
+    for(int i=0; i<image->height; i++){
+        for(int j=0; j<image->width; j++){
+            // Initiating elements that are reachable
+            int elements_reachable = 0;
+            int * elements = malloc(
+                    sizeof(int)*matrix_filter_size*matrix_filter_size);
+            for(int k=i-row_col_near; k<=i+row_col_near; k++){
+                for (int l=j-row_col_near; l<=j+row_col_near; l++){
+                    // If pixel is inside the limits they will be counted.
+                    if((k>=0 && k<image->height) && (l>=0 && l<image->width)){
+                        elements[elements_reachable] = image->matrix[k][l];
+                        elements_reachable++;
+                    }
+                }
+            }
+            qsort( elements, elements_reachable, sizeof(int), compare );
+            new_image->matrix[i][j] = elements[filter_index];
+            free(elements);
+        }
+    }
+    // free the old matrix
+    free(image->matrix);
+    // pass values from the old image
+    image->matrix = new_image->matrix;
+    // free the auxiliar struct
+    free(new_image);
+}
+
+// Function to apply the Sharpness filter
+void PGMSharpness(PGM *image, int row_col_near, float k){
+    PGM *image_blur = PGMCloneImage(image);
+    PGM *image_filter = PGMCloneImage(image);
+    PGMAverage(image_blur, row_col_near);
+    PGMSubImages(image_filter, image_blur);
+    PGMBrighterMult(image_filter, k);
+    PGMSumImages(image, image_filter);
 }
 
 // Function to get the average of the region of rows and cols near to [i][j]
@@ -1129,6 +1196,10 @@ void PPMPrint(PPM *image);
 // Function to print image on file
 void PPMPrintToFile(PPM *image, char *filename);
 
+// Function to extract the channel from image R=0; G=0; B=0 into a new PGM
+// returned
+PGM * PPMExtractChannelToPGM(PPM *image, int channel);
+
 // Function to extract the channel from image R=0; G=0; B=0
 void PPMExtractChannel(PPM *image, int channel);
 
@@ -1148,7 +1219,21 @@ void PPMMixChannel(PPM *image, int red, int green, int blue);
 void PPMSwapFromImgChannel(PPM *dest, PPM *src, int channel);
 
 // Function to use the 3 images into the dest
-void PPMMountChannelsFromimages(PPM *dest, PPM *src_red, PPM *src_green, PPM *src_blue);
+void PPMMountChannelsFromImages(
+        PPM *dest, PPM *src_red, PPM *src_green, PPM *src_blue);
+
+// Function to use the 3 PGM images into the dest
+void PPMMountChannelsFromPGMs(
+        PPM *dest, PGM *src_red, PGM *src_green, PGM *src_blue);
+
+// Function to extract the CMY channel image C=0; M=1; Y=2
+void PPMExtractCMYChannel(PPM *image, int channel);
+
+// Function to extract the HSI channel image H=0; S=1; I=2
+void PPMExtractHSIChannel(PPM *image, int channel);
+
+// Function to equalize each channel as PGM an remount the ppm
+void PPMEqualizedHistogramGlobal(PPM *image);
 
 // Function to build a PPM from a char buffer.
 void PPMConstFromBuffer(PPM *image, char *buffer){
@@ -1382,6 +1467,19 @@ void PPMPrintToFile(PPM *image, char *filename){
     fclose (file);
 }
 
+// Function to extract the channel from image R=0; G=0; B=0 into a new PGM
+// returned
+PGM * PPMExtractChannelToPGM(PPM *image, int channel){
+    PGM * new_image = PGMConst(
+            "P2", image->width, image->height, image->color_range);
+    for (int i = 0; i < image->height; i++) {
+        for (int j = 0; j < image->width; j++){
+            new_image->matrix[i][j] = image->matrix[i][j][channel];
+		}
+	}
+    return new_image;
+}
+
 // Function to extract the channel from image R=0; G=0; B=0
 void PPMExtractChannel(PPM *image, int channel){
     for (int i = 0; i < image->height; i++) {
@@ -1465,7 +1563,8 @@ void PPMSwapFromImgChannel(PPM *dest, PPM *src, int channel){
 }
 
 // Function to use the 3 images into the dest
-void PPMMountChannelsFromimages(PPM *dest, PPM *src_red, PPM *src_green, PPM *src_blue){
+void PPMMountChannelsFromImages(
+        PPM *dest, PPM *src_red, PPM *src_green, PPM *src_blue){
     for (int i = 0; i < dest->height; i++) {
         for (int j = 0; j < dest->width; j++){
             dest->matrix[i][j][0]= src_red->matrix[i][j][0];
@@ -1473,6 +1572,98 @@ void PPMMountChannelsFromimages(PPM *dest, PPM *src_red, PPM *src_green, PPM *sr
             dest->matrix[i][j][2]= src_blue->matrix[i][j][2];
 		}
 	}
+}
+
+// Function to use the 3 PGM images into the dest
+void PPMMountChannelsFromPGMs(
+        PPM *dest, PGM *src_red, PGM *src_green, PGM *src_blue){
+    for (int i = 0; i < dest->height; i++) {
+        for (int j = 0; j < dest->width; j++){
+            dest->matrix[i][j][0]= src_red->matrix[i][j];
+            dest->matrix[i][j][1]= src_green->matrix[i][j];
+            dest->matrix[i][j][2]= src_blue->matrix[i][j];
+		}
+	}
+}
+
+// Function to extract the CMY channel image C=0; M=1; Y=2
+void PPMExtractCMYChannel(PPM *image, int channel){
+    for (int i = 0; i < image->height; i++) {
+        for (int j = 0; j < image->width; j++){
+            int channel_val = image->matrix[i][j][channel];
+            for(int rgb=0; rgb<3; rgb++){
+                // It will extract the color from color_range - channel
+                image->matrix[i][j][rgb]=(image->color_range - channel_val);
+            }
+		}
+	}
+}
+
+// Function to extract the HSI channel image H=0; S=1; I=2
+void PPMExtractHSIChannel(PPM *image, int channel){
+    for (int i = 0; i < image->height; i++) {
+        for (int j = 0; j < image->width; j++){
+            int result;
+            float r, g, b, RGB, minor, h;
+            r = image->matrix[i][j][0];
+            g = image->matrix[i][j][1];
+            b = image->matrix[i][j][2];
+            RGB = r+g+b;
+            if(RGB>0){
+                r=r/RGB;
+                g=g/RGB;
+                b=b/RGB;
+            }
+            else{
+                r = 0; g = 0; b = 0;
+            }
+            switch (channel){
+                case 0:
+                    h = (
+                        1/
+                        cos(
+                            0.5*(r-g+r-b)/sqrt(
+                                pow((r-g),2)+(r-b)*(g-b)
+                                )
+                            )
+                        );
+                    if (b>g){
+                        h = 2*PI - h;
+                    }
+                    result = (int)((image->color_range*(h/(2*PI)))+0.5);
+                    break;
+                case 1:
+                    minor = r;
+                    if (minor>g){
+                        minor=g;
+                    }
+                    if (minor>b){
+                        minor=b;
+                    }
+                    result = (int)(((1.0-3.0*minor)*image->color_range)+0.5);
+                    break;
+                case 2:
+                    result = (int)(((RGB/(3.0*(float)image->color_range))*image->color_range)+0.5);
+                    break;
+                default:
+                    break;
+            }
+            for(int rgb=0; rgb<3; rgb++){
+                image->matrix[i][j][rgb] = result;
+            }
+		}
+	}
+}
+
+// Function to equalize each channel as PGM an remount the ppm
+void PPMEqualizedHistogramGlobal(PPM *image){
+    PGM * red = PPMExtractChannelToPGM(image, 0);
+    PGM * green = PPMExtractChannelToPGM(image, 1);
+    PGM * blue = PPMExtractChannelToPGM(image, 2);
+    PGMEqualizedHistogramGlobal(red);
+    PGMEqualizedHistogramGlobal(green);
+    PGMEqualizedHistogramGlobal(blue);
+    PPMMountChannelsFromPGMs(image, red, green, blue);
 }
 
 int main(int argc, char **argv){
@@ -1688,6 +1879,29 @@ int main(int argc, char **argv){
         PGMPrint(image);
         PGMPrintToFile(image, pgm_result);
     }
+    // ./mypdi PGMMedian lena.pgm 3
+    else if(strcmp(cmd, "PGMMedian")==0){
+        char *src_img_file_name = argv[2];
+        int val = atoi(argv[3]);
+        PGM *image = malloc(sizeof(struct PGM));
+        PGMConstFromFile(image, src_img_file_name);
+        PGMMedian(image, val);
+        PGMStabilizeValues(image);
+        PGMPrint(image);
+        PGMPrintToFile(image, pgm_result);
+    }
+    // ./mypdi PGMSharpness lena.pgm 3 1
+    else if(strcmp(cmd, "PGMSharpness")==0){
+        char *src_img_file_name = argv[2];
+        int val = atoi(argv[3]);
+        float k = atof(argv[4]);
+        PGM *image = malloc(sizeof(struct PGM));
+        PGMConstFromFile(image, src_img_file_name);
+        PGMSharpness(image, val, k);
+        PGMStabilizeValues(image);
+        PGMPrint(image);
+        PGMPrintToFile(image, pgm_result);
+    }
     // ./mypdi PGMLaplaceC lena.pgm
     else if(strcmp(cmd, "PGMLaplaceC")==0){
         char *src_img_file_name = argv[2];
@@ -1752,6 +1966,17 @@ int main(int argc, char **argv){
         PGM *image = malloc(sizeof(struct PGM));
         PGMConstFromFile(image, src_img_file_name);
         PGMHistogramToFile(image, "result.csv");
+    }
+    // INITING PPM METHODS!!!
+    // ./mypdi PPMExtractChannelToPGM lenna.ppm 1
+    else if(strcmp(cmd, "PPMExtractChannelToPGM")==0){
+        char *src_img_file_name = argv[2];
+        int val = atoi(argv[3]);
+        PPM *image = malloc(sizeof(struct PPM));
+        PPMConstFromFile(image, src_img_file_name);
+        PGM * image_pgm = PPMExtractChannelToPGM(image, val);
+        PGMPrint(image_pgm);
+        PGMPrintToFile(image_pgm, pgm_result);
     }
     // INITING PPM METHODS!!!
     // ./mypdi PPMExtractChannel lenna.ppm 1
@@ -1824,9 +2049,9 @@ int main(int argc, char **argv){
         PPMPrint(image1);
         PPMPrintToFile(image1, ppm_result);
     }
-    // ./mypdi PPMMountChannelsFromimages lenna_red.ppm lenna_green.ppm
+    // ./mypdi PPMMountChannelsFromImages lenna_red.ppm lenna_green.ppm
     // lenna_blue.ppm
-    else if(strcmp(cmd, "PPMMountChannelsFromimages")==0){
+    else if(strcmp(cmd, "PPMMountChannelsFromImages")==0){
         char *src_img_1_file_name = argv[2];
         char *src_img_2_file_name = argv[3];
         char *src_img_3_file_name = argv[4];
@@ -1840,9 +2065,57 @@ int main(int argc, char **argv){
         PPM *image3 = malloc(sizeof(struct PPM));
         PPMConstFromFile(image3, src_img_3_file_name);
 
-        PPMMountChannelsFromimages(image1, image1, image2, image3);
+        PPMMountChannelsFromImages(image1, image1, image2, image3);
         PPMPrint(image1);
         PPMPrintToFile(image1, ppm_result);
+    }
+    // ./mypdi PPMMountChannelsFromPGMs lenna.ppm lenna_red.pgm lenna_green.pgm
+    // lenna_blue.pgm
+    else if(strcmp(cmd, "PPMMountChannelsFromPGMs")==0){
+        char *src_img_1_file_name = argv[2];
+        char *src_img_2_file_name = argv[3];
+        char *src_img_3_file_name = argv[4];
+        char *src_img_4_file_name = argv[5];
+
+        PPM *image1 = malloc(sizeof(struct PPM));
+        PPMConstFromFile(image1, src_img_1_file_name);
+
+        PGM *image2 = malloc(sizeof(struct PGM));
+        PGMConstFromFile(image2, src_img_2_file_name);
+
+        PGM *image3 = malloc(sizeof(struct PGM));
+        PGMConstFromFile(image3, src_img_3_file_name);
+
+        PGM *image4 = malloc(sizeof(struct PGM));
+        PGMConstFromFile(image4, src_img_4_file_name);
+
+        PPMMountChannelsFromPGMs(image1, image2, image3, image4);
+        PPMPrint(image1);
+        PPMPrintToFile(image1, ppm_result);
+    }
+    else if (strcmp(cmd, "PPMExtractCMYChannel")==0){
+        char *src_img_file_name = argv[2];
+        int val = atoi(argv[3]);
+        PPM *image = malloc(sizeof(struct PPM));
+        PPMConstFromFile(image, src_img_file_name);
+        PPMExtractCMYChannel(image, val);
+        PPMPrint(image);
+        PPMPrintToFile(image, ppm_result);
+    }else if (strcmp(cmd, "PPMExtractHSIChannel")==0){
+        char *src_img_file_name = argv[2];
+        int val = atoi(argv[3]);
+        PPM *image = malloc(sizeof(struct PPM));
+        PPMConstFromFile(image, src_img_file_name);
+        PPMExtractHSIChannel(image, val);
+        PPMPrint(image);
+        PPMPrintToFile(image, ppm_result);
+    }else if (strcmp(cmd, "PPMEqualizedHistogramGlobal")==0){
+        char *src_img_file_name = argv[2];
+        PPM *image = malloc(sizeof(struct PPM));
+        PPMConstFromFile(image, src_img_file_name);
+        PPMEqualizedHistogramGlobal(image);
+        PPMPrint(image);
+        PPMPrintToFile(image, ppm_result);
     }
     // Showing the arguments used
     printf("Argumenst Used: \n\n");
